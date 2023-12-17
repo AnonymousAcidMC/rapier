@@ -146,6 +146,17 @@ impl JointVelocityConstraint<Real, 1> {
         let limit_axes = joint.limit_axes.bits() & !locked_axes;
         let coupled_axes = joint.coupled_axes.bits();
 
+        // The has_lin/ang_coupling test is needed to avoid shl overflow later.
+        let has_lin_coupling = (coupled_axes & JointAxesMask::LIN_AXES.bits()) != 0;
+        let first_coupled_lin_axis_id =
+            (coupled_axes & JointAxesMask::LIN_AXES.bits()).trailing_zeros() as usize;
+
+        #[cfg(feature = "dim3")]
+        let has_ang_coupling = (coupled_axes & JointAxesMask::ANG_AXES.bits()) != 0;
+        #[cfg(feature = "dim3")]
+        let first_coupled_ang_axis_id =
+            (coupled_axes & JointAxesMask::ANG_AXES.bits()).trailing_zeros() as usize;
+
         let builder = JointVelocityConstraintBuilder::new(
             frame1,
             frame2,
@@ -195,17 +206,28 @@ impl JointVelocityConstraint<Real, 1> {
         }
 
         if (motor_axes & coupled_axes) & JointAxesMask::LIN_AXES.bits() != 0 {
-            // TODO: coupled linear motor constraint.
-            // out[len] = builder.motor_linear_coupled(
-            //     params,
-            //     [joint_id],
-            //     body1,
-            //     body2,
-            //     limit_axes & coupled_axes,
-            //     &joint.limits,
-            //     WritebackId::Limit(0), // TODO: writeback
-            // );
-            // len += 1;
+            // if (motor_axes & !coupled_axes) & (1 << first_coupled_lin_axis_id) != 0 {
+            //     let limits = if limit_axes & (1 << first_coupled_lin_axis_id) != 0 {
+            //         Some([
+            //             joint.limits[first_coupled_lin_axis_id].min,
+            //             joint.limits[first_coupled_lin_axis_id].max,
+            //         ])
+            //     } else {
+            //         None
+            //     };
+            //
+            //     out[len] = builder.motor_linear_coupled
+            //         params,
+            //         [joint_id],
+            //         body1,
+            //         body2,
+            //         coupled_axes,
+            //         &joint.motors[first_coupled_lin_axis_id].motor_params(params.dt),
+            //         limits,
+            //         WritebackId::Motor(first_coupled_lin_axis_id),
+            //     );
+            //     len += 1;
+            // }
         }
 
         JointVelocityConstraintBuilder::finalize_constraints(&mut out[start..len]);
@@ -262,28 +284,34 @@ impl JointVelocityConstraint<Real, 1> {
         }
 
         #[cfg(feature = "dim3")]
-        if (limit_axes & coupled_axes) & JointAxesMask::ANG_AXES.bits() != 0 {
+        if has_ang_coupling && (limit_axes & (1 << first_coupled_ang_axis_id)) != 0 {
             out[len] = builder.limit_angular_coupled(
                 params,
                 [joint_id],
                 body1,
                 body2,
-                limit_axes & coupled_axes,
-                &joint.limits,
-                WritebackId::Limit(0), // TODO: writeback
+                coupled_axes,
+                [
+                    joint.limits[first_coupled_ang_axis_id].min,
+                    joint.limits[first_coupled_ang_axis_id].max,
+                ],
+                WritebackId::Limit(first_coupled_ang_axis_id),
             );
             len += 1;
         }
 
-        if (limit_axes & coupled_axes) & JointAxesMask::LIN_AXES.bits() != 0 {
+        if has_lin_coupling && (limit_axes & (1 << first_coupled_lin_axis_id)) != 0 {
             out[len] = builder.limit_linear_coupled(
                 params,
                 [joint_id],
                 body1,
                 body2,
-                limit_axes & coupled_axes,
-                &joint.limits,
-                WritebackId::Limit(0), // TODO: writeback
+                coupled_axes,
+                [
+                    joint.limits[first_coupled_lin_axis_id].min,
+                    joint.limits[first_coupled_lin_axis_id].max,
+                ],
+                WritebackId::Limit(first_coupled_lin_axis_id),
             );
             len += 1;
         }
@@ -477,6 +505,17 @@ impl JointVelocityGroundConstraint<Real, 1> {
         let limit_axes = joint.limit_axes.bits() & !locked_axes;
         let coupled_axes = joint.coupled_axes.bits();
 
+        // The has_lin/ang_coupling test is needed to avoid shl overflow later.
+        let has_lin_coupling = (coupled_axes & JointAxesMask::LIN_AXES.bits()) != 0;
+        let first_coupled_lin_axis_id =
+            (coupled_axes & JointAxesMask::LIN_AXES.bits()).trailing_zeros() as usize;
+
+        #[cfg(feature = "dim3")]
+        let has_ang_coupling = (coupled_axes & JointAxesMask::ANG_AXES.bits()) != 0;
+        #[cfg(feature = "dim3")]
+        let first_coupled_ang_axis_id =
+            (coupled_axes & JointAxesMask::ANG_AXES.bits()).trailing_zeros() as usize;
+
         let builder = JointVelocityConstraintBuilder::new(
             frame1,
             frame2,
@@ -521,27 +560,32 @@ impl JointVelocityGroundConstraint<Real, 1> {
             }
         }
 
-        if (motor_axes & coupled_axes) & JointAxesMask::ANG_AXES.bits() != 0 {
+        #[cfg(feature = "dim3")]
+        if has_ang_coupling && (motor_axes & (1 << first_coupled_ang_axis_id)) != 0 {
             // TODO: coupled angular motor constraint.
         }
 
-        if (motor_axes & coupled_axes) & JointAxesMask::LIN_AXES.bits() != 0 {
-            /*
-            // TODO: coupled linear motor constraint.
+        if has_lin_coupling && (motor_axes & (1 << first_coupled_lin_axis_id)) != 0 {
+            let limits = if (limit_axes & (1 << first_coupled_lin_axis_id)) != 0 {
+                Some([
+                    joint.limits[first_coupled_lin_axis_id].min,
+                    joint.limits[first_coupled_lin_axis_id].max,
+                ])
+            } else {
+                None
+            };
+
             out[len] = builder.motor_linear_coupled_ground(
                 params,
                 [joint_id],
                 body1,
                 body2,
-                motor_axes & coupled_axes,
-                &joint.motors,
-                limit_axes & coupled_axes,
-                &joint.limits,
-                WritebackId::Limit(0), // TODO: writeback
+                coupled_axes,
+                &joint.motors[first_coupled_lin_axis_id].motor_params(params.dt),
+                limits,
+                WritebackId::Motor(first_coupled_lin_axis_id),
             );
             len += 1;
-            */
-            todo!()
         }
 
         JointVelocityConstraintBuilder::finalize_ground_constraints(&mut out[start..len]);
@@ -604,28 +648,34 @@ impl JointVelocityGroundConstraint<Real, 1> {
         }
 
         #[cfg(feature = "dim3")]
-        if (limit_axes & coupled_axes) & JointAxesMask::ANG_AXES.bits() != 0 {
+        if has_ang_coupling && (limit_axes & (1 << first_coupled_ang_axis_id)) != 0 {
             out[len] = builder.limit_angular_coupled_ground(
                 params,
                 [joint_id],
                 body1,
                 body2,
-                limit_axes & coupled_axes,
-                &joint.limits,
-                WritebackId::Limit(0), // TODO: writeback
+                coupled_axes,
+                [
+                    joint.limits[first_coupled_ang_axis_id].min,
+                    joint.limits[first_coupled_ang_axis_id].max,
+                ],
+                WritebackId::Limit(first_coupled_ang_axis_id),
             );
             len += 1;
         }
 
-        if (limit_axes & coupled_axes) & JointAxesMask::LIN_AXES.bits() != 0 {
+        if has_lin_coupling && (limit_axes & (1 << first_coupled_lin_axis_id)) != 0 {
             out[len] = builder.limit_linear_coupled_ground(
                 params,
                 [joint_id],
                 body1,
                 body2,
-                limit_axes & coupled_axes,
-                &joint.limits,
-                WritebackId::Limit(0), // TODO: writeback
+                coupled_axes,
+                [
+                    joint.limits[first_coupled_lin_axis_id].min,
+                    joint.limits[first_coupled_lin_axis_id].max,
+                ],
+                WritebackId::Limit(first_coupled_lin_axis_id),
             );
             len += 1;
         }

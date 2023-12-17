@@ -3,7 +3,7 @@ use crate::dynamics::solver::joint_constraint::joint_velocity_constraint::{
 };
 use crate::dynamics::solver::joint_constraint::SolverBody;
 use crate::dynamics::solver::MotorParameters;
-use crate::dynamics::{IntegrationParameters, JointIndex, JointLimits};
+use crate::dynamics::{IntegrationParameters, JointIndex};
 use crate::math::{AngVector, Isometry, Matrix, Point, Real, Rotation, Vector, ANG_DIM, DIM};
 use crate::utils;
 use crate::utils::{IndexMut2, WCrossMatrix, WDot, WQuat, WReal};
@@ -118,18 +118,17 @@ impl<N: WReal> JointVelocityConstraintBuilder<N> {
         joint_id: [JointIndex; LANES],
         body1: &SolverBody<N, LANES>,
         body2: &SolverBody<N, LANES>,
-        limited_coupled_axes: u8,
-        limits: &[JointLimits<N>],
+        coupled_axes: u8,
+        limits: [N; 2],
         writeback_id: WritebackId,
     ) -> JointVelocityConstraint<N, LANES> {
         let zero = N::zero();
         let mut lin_jac = Vector::zeros();
         let mut ang_jac1: AngVector<N> = na::zero();
         let mut ang_jac2: AngVector<N> = na::zero();
-        let mut limit = N::zero();
 
         for i in 0..DIM {
-            if limited_coupled_axes & (1 << i) != 0 {
+            if coupled_axes & (1 << i) != 0 {
                 let coeff = self.basis.column(i).dot(&self.lin_err);
                 lin_jac += self.basis.column(i) * coeff;
                 #[cfg(feature = "dim2")]
@@ -142,11 +141,11 @@ impl<N: WReal> JointVelocityConstraintBuilder<N> {
                     ang_jac1 += self.cmat1_basis.column(i) * coeff;
                     ang_jac2 += self.cmat2_basis.column(i) * coeff;
                 }
-                limit += limits[i].max * limits[i].max;
             }
         }
 
-        limit = limit.simd_sqrt();
+        // FIXME: handle min limit too.
+
         let dist = lin_jac.norm();
         let inv_dist = crate::utils::simd_inv(dist);
         lin_jac *= inv_dist;
@@ -155,14 +154,14 @@ impl<N: WReal> JointVelocityConstraintBuilder<N> {
 
         let dvel = lin_jac.dot(&(body2.linvel - body1.linvel))
             + (ang_jac2.gdot(body2.angvel) - ang_jac1.gdot(body1.angvel));
-        let rhs_wo_bias = dvel + (dist - limit).simd_min(zero) * N::splat(params.inv_dt());
+        let rhs_wo_bias = dvel + (dist - limits[1]).simd_min(zero) * N::splat(params.inv_dt());
 
         ang_jac1 = body1.sqrt_ii * ang_jac1;
         ang_jac2 = body2.sqrt_ii * ang_jac2;
 
         let erp_inv_dt = N::splat(params.joint_erp_inv_dt());
         let cfm_coeff = N::splat(params.joint_cfm_coeff());
-        let rhs_bias = (dist - limit).simd_max(zero) * erp_inv_dt;
+        let rhs_bias = (dist - limits[1]).simd_max(zero) * erp_inv_dt;
         let rhs = rhs_wo_bias + rhs_bias;
         let impulse_bounds = [N::zero(), N::splat(Real::INFINITY)];
 
@@ -544,18 +543,17 @@ impl<N: WReal> JointVelocityConstraintBuilder<N> {
         joint_id: [JointIndex; LANES],
         body1: &SolverBody<N, LANES>,
         body2: &SolverBody<N, LANES>,
-        limited_coupled_axes: u8,
-        limits: &[JointLimits<N>],
+        coupled_axes: u8,
+        limits: [N; 2],
         writeback_id: WritebackId,
     ) -> JointVelocityGroundConstraint<N, LANES> {
         let zero = N::zero();
         let mut lin_jac = Vector::zeros();
         let mut ang_jac1: AngVector<N> = na::zero();
         let mut ang_jac2: AngVector<N> = na::zero();
-        let mut limit = N::zero();
 
         for i in 0..DIM {
-            if limited_coupled_axes & (1 << i) != 0 {
+            if coupled_axes & (1 << i) != 0 {
                 let coeff = self.basis.column(i).dot(&self.lin_err);
                 lin_jac += self.basis.column(i) * coeff;
                 #[cfg(feature = "dim2")]
@@ -568,26 +566,25 @@ impl<N: WReal> JointVelocityConstraintBuilder<N> {
                     ang_jac1 += self.cmat1_basis.column(i) * coeff;
                     ang_jac2 += self.cmat2_basis.column(i) * coeff;
                 }
-                limit += limits[i].max * limits[i].max;
             }
         }
 
-        limit = limit.simd_sqrt();
         let dist = lin_jac.norm();
         let inv_dist = crate::utils::simd_inv(dist);
         lin_jac *= inv_dist;
         ang_jac1 *= inv_dist;
         ang_jac2 *= inv_dist;
 
+        // FIXME: handle min limit too.
         let dvel = lin_jac.dot(&(body2.linvel - body1.linvel))
             + (ang_jac2.gdot(body2.angvel) - ang_jac1.gdot(body1.angvel));
-        let rhs_wo_bias = dvel + (dist - limit).simd_min(zero) * N::splat(params.inv_dt());
+        let rhs_wo_bias = dvel + (dist - limits[1]).simd_min(zero) * N::splat(params.inv_dt());
 
         ang_jac2 = body2.sqrt_ii * ang_jac2;
 
         let erp_inv_dt = N::splat(params.joint_erp_inv_dt());
         let cfm_coeff = N::splat(params.joint_cfm_coeff());
-        let rhs_bias = (dist - limit).simd_max(zero) * erp_inv_dt;
+        let rhs_bias = (dist - limits[1]).simd_max(zero) * erp_inv_dt;
         let rhs = rhs_wo_bias + rhs_bias;
         let impulse_bounds = [N::zero(), N::splat(Real::INFINITY)];
 
@@ -664,76 +661,79 @@ impl<N: WReal> JointVelocityConstraintBuilder<N> {
         }
     }
 
-    // pub fn motor_linear_coupled_ground<const LANES: usize>(
-    //     &self,
-    //     _joint_id: [JointIndex; LANES],
-    //     _body1: &SolverBody<N, LANES>,
-    //     _body2: &SolverBody<N, LANES>,
-    //     _motor_coupled_axes: u8,
-    //     _motors: &[MotorParameters<N>],
-    //     _limited_coupled_axes: u8,
-    //     _limits: &[JointLimits<N>],
-    //     _writeback_id: WritebackId,
-    // ) -> JointVelocityGroundConstraint<N, LANES> {
-    //     let zero = N::zero();
-    //     let mut lin_jac = Vector::zeros();
-    //     let mut ang_jac1: AngVector<N> = na::zero();
-    //     let mut ang_jac2: AngVector<N> = na::zero();
-    //     let mut limit = N::zero();
+    pub fn motor_linear_coupled_ground<const LANES: usize>(
+        &self,
+        params: &IntegrationParameters,
+        joint_id: [JointIndex; LANES],
+        body1: &SolverBody<N, LANES>,
+        body2: &SolverBody<N, LANES>,
+        coupled_axes: u8,
+        motor_params: &MotorParameters<N>,
+        limits: Option<[N; 2]>,
+        writeback_id: WritebackId,
+    ) -> JointVelocityGroundConstraint<N, LANES> {
+        let inv_dt = N::splat(params.inv_dt());
 
-    //     for i in 0..DIM {
-    //         if limited_coupled_axes & (1 << i) != 0 {
-    //             let coeff = self.basis.column(i).dot(&self.lin_err);
-    //             lin_jac += self.basis.column(i) * coeff;
-    //             #[cfg(feature = "dim2")]
-    //             {
-    //                 ang_jac1 += self.cmat1_basis[i] * coeff;
-    //                 ang_jac2 += self.cmat2_basis[i] * coeff;
-    //             }
-    //             #[cfg(feature = "dim3")]
-    //             {
-    //                 ang_jac1 += self.cmat1_basis.column(i) * coeff;
-    //                 ang_jac2 += self.cmat2_basis.column(i) * coeff;
-    //             }
-    //             limit += limits[i].max * limits[i].max;
-    //         }
-    //     }
+        let mut lin_jac = Vector::zeros();
+        let mut ang_jac1: AngVector<N> = na::zero();
+        let mut ang_jac2: AngVector<N> = na::zero();
 
-    //     limit = limit.simd_sqrt();
-    //     let dist = lin_jac.norm();
-    //     let inv_dist = crate::utils::simd_inv(dist);
-    //     lin_jac *= inv_dist;
-    //     ang_jac1 *= inv_dist;
-    //     ang_jac2 *= inv_dist;
+        for i in 0..DIM {
+            if coupled_axes & (1 << i) != 0 {
+                let coeff = self.basis.column(i).dot(&self.lin_err);
+                lin_jac += self.basis.column(i) * coeff;
+                #[cfg(feature = "dim2")]
+                {
+                    ang_jac1 += self.cmat1_basis[i] * coeff;
+                    ang_jac2 += self.cmat2_basis[i] * coeff;
+                }
+                #[cfg(feature = "dim3")]
+                {
+                    ang_jac1 += self.cmat1_basis.column(i) * coeff;
+                    ang_jac2 += self.cmat2_basis.column(i) * coeff;
+                }
+            }
+        }
 
-    //     let dvel = lin_jac.dot(&(body2.linvel - body1.linvel))
-    //         + (ang_jac2.gdot(body2.angvel) - ang_jac1.gdot(body1.angvel));
-    //     let rhs_wo_bias = dvel + (dist - limit).simd_min(zero) * N::splat(params.inv_dt());
+        let dist = lin_jac.norm();
+        let inv_dist = crate::utils::simd_inv(dist);
+        lin_jac *= inv_dist;
+        ang_jac1 *= inv_dist;
+        ang_jac2 *= inv_dist;
 
-    //     ang_jac2 = body2.sqrt_ii * ang_jac2;
+        let mut rhs_wo_bias = N::zero();
+        if motor_params.erp_inv_dt != N::zero() {
+            rhs_wo_bias += (dist - motor_params.target_pos) * motor_params.erp_inv_dt;
+        }
 
-    //     let erp_inv_dt = N::splat(params.joint_erp_inv_dt());
-    //     let cfm_coeff = N::splat(params.joint_cfm_coeff());
-    //     let rhs_bias = (dist - limit).simd_max(zero) * erp_inv_dt;
-    //     let rhs = rhs_wo_bias + rhs_bias;
-    //     let impulse_bounds = [N::zero(), N::splat(Real::INFINITY)];
+        let mut target_vel = motor_params.target_vel;
+        if let Some(limits) = limits {
+            target_vel =
+                target_vel.simd_clamp((limits[0] - dist) * inv_dt, (limits[1] - dist) * inv_dt);
+        };
 
-    //     JointVelocityGroundConstraint {
-    //         joint_id,
-    //         mj_lambda2: body2.mj_lambda,
-    //         im2: body2.im,
-    //         impulse: N::zero(),
-    //         impulse_bounds,
-    //         lin_jac,
-    //         ang_jac2,
-    //         inv_lhs: N::zero(), // Will be set during ortogonalization.
-    //         cfm_coeff,
-    //         cfm_gain: N::zero(),
-    //         rhs,
-    //         rhs_wo_bias,
-    //         writeback_id,
-    //     }
-    // }
+        let dvel = lin_jac.dot(&(body2.linvel - body1.linvel))
+            + (ang_jac2.gdot(body2.angvel) - ang_jac1.gdot(body1.angvel));
+        rhs_wo_bias += dvel - target_vel;
+
+        ang_jac2 = body2.sqrt_ii * ang_jac2;
+
+        JointVelocityGroundConstraint {
+            joint_id,
+            mj_lambda2: body2.mj_lambda,
+            im2: body2.im,
+            impulse: N::zero(),
+            impulse_bounds: [-motor_params.max_impulse, motor_params.max_impulse],
+            lin_jac,
+            ang_jac2,
+            inv_lhs: N::zero(), // Will be set during ortogonalization.
+            cfm_coeff: motor_params.cfm_coeff,
+            cfm_gain: motor_params.cfm_gain,
+            rhs: rhs_wo_bias,
+            rhs_wo_bias,
+            writeback_id,
+        }
+    }
 
     pub fn lock_linear_ground<const LANES: usize>(
         &self,
@@ -984,12 +984,12 @@ impl JointVelocityConstraintBuilder<Real> {
         joint_id: [JointIndex; 1],
         body1: &SolverBody<Real, 1>,
         body2: &SolverBody<Real, 1>,
-        limited_coupled_axes: u8,
-        limits: &[JointLimits<Real>],
+        coupled_axes: u8,
+        limits: [Real; 2],
         writeback_id: WritebackId,
     ) -> JointVelocityConstraint<Real, 1> {
-        // NOTE: right now, this only supports exactly 2 coupled axes.
-        let ang_coupled_axes = limited_coupled_axes >> DIM;
+        // NOTE: right now, this only supports exactly 2 coupled axes.
+        let ang_coupled_axes = coupled_axes >> DIM;
         assert_eq!(ang_coupled_axes.count_ones(), 2);
         let not_coupled_index = ang_coupled_axes.trailing_ones() as usize;
         let axis1 = self.basis.column(not_coupled_index).into_owned();
@@ -1000,21 +1000,9 @@ impl JointVelocityConstraintBuilder<Real> {
             .axis_angle()
             .map(|(axis, angle)| (axis.into_inner(), angle))
             .unwrap_or_else(|| (axis1.orthonormal_basis()[0], 0.0));
-        let mut ang_limits = [0.0, 0.0];
 
-        for k in 0..3 {
-            if (ang_coupled_axes & (1 << k)) != 0 {
-                let limit = &limits[DIM + k];
-                ang_limits[0] += limit.min * limit.min;
-                ang_limits[1] += limit.max * limit.max;
-            }
-        }
-
-        ang_limits[0] = ang_limits[0].sqrt();
-        ang_limits[1] = ang_limits[1].sqrt();
-
-        let min_enabled = angle <= ang_limits[0];
-        let max_enabled = ang_limits[1] <= angle;
+        let min_enabled = angle <= limits[0];
+        let max_enabled = limits[1] <= angle;
 
         let impulse_bounds = [
             if min_enabled { -Real::INFINITY } else { 0.0 },
@@ -1026,8 +1014,7 @@ impl JointVelocityConstraintBuilder<Real> {
 
         let erp_inv_dt = params.joint_erp_inv_dt();
         let cfm_coeff = params.joint_cfm_coeff();
-        let rhs_bias =
-            ((angle - ang_limits[1]).max(0.0) - (ang_limits[0] - angle).max(0.0)) * erp_inv_dt;
+        let rhs_bias = ((angle - limits[1]).max(0.0) - (limits[0] - angle).max(0.0)) * erp_inv_dt;
 
         let ang_jac1 = body1.sqrt_ii * ang_jac;
         let ang_jac2 = body2.sqrt_ii * ang_jac;
@@ -1059,12 +1046,12 @@ impl JointVelocityConstraintBuilder<Real> {
         joint_id: [JointIndex; 1],
         body1: &SolverBody<Real, 1>,
         body2: &SolverBody<Real, 1>,
-        limited_coupled_axes: u8,
-        limits: &[JointLimits<Real>],
+        coupled_axes: u8,
+        limits: [Real; 2],
         writeback_id: WritebackId,
     ) -> JointVelocityGroundConstraint<Real, 1> {
-        // NOTE: right now, this only supports exactly 2 coupled axes.
-        let ang_coupled_axes = limited_coupled_axes >> DIM;
+        // NOTE: right now, this only supports exactly 2 coupled axes.
+        let ang_coupled_axes = coupled_axes >> DIM;
         assert_eq!(ang_coupled_axes.count_ones(), 2);
         let not_coupled_index = ang_coupled_axes.trailing_ones() as usize;
         let axis1 = self.basis.column(not_coupled_index).into_owned();
@@ -1075,21 +1062,9 @@ impl JointVelocityConstraintBuilder<Real> {
             .axis_angle()
             .map(|(axis, angle)| (axis.into_inner(), angle))
             .unwrap_or_else(|| (axis1.orthonormal_basis()[0], 0.0));
-        let mut ang_limits = [0.0, 0.0];
 
-        for k in 0..3 {
-            if (ang_coupled_axes & (1 << k)) != 0 {
-                let limit = &limits[DIM + k];
-                ang_limits[0] += limit.min * limit.min;
-                ang_limits[1] += limit.max * limit.max;
-            }
-        }
-
-        ang_limits[0] = ang_limits[0].sqrt();
-        ang_limits[1] = ang_limits[1].sqrt();
-
-        let min_enabled = angle <= ang_limits[0];
-        let max_enabled = ang_limits[1] <= angle;
+        let min_enabled = angle <= limits[0];
+        let max_enabled = limits[1] <= angle;
 
         let impulse_bounds = [
             if min_enabled { -Real::INFINITY } else { 0.0 },
@@ -1101,8 +1076,7 @@ impl JointVelocityConstraintBuilder<Real> {
 
         let erp_inv_dt = params.joint_erp_inv_dt();
         let cfm_coeff = params.joint_cfm_coeff();
-        let rhs_bias =
-            ((angle - ang_limits[1]).max(0.0) - (ang_limits[0] - angle).max(0.0)) * erp_inv_dt;
+        let rhs_bias = ((angle - limits[1]).max(0.0) - (limits[0] - angle).max(0.0)) * erp_inv_dt;
 
         let ang_jac2 = body2.sqrt_ii * ang_jac;
 
