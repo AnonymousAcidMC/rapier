@@ -353,14 +353,12 @@ impl<N: WReal> JointVelocityConstraintBuilder<N> {
 
         let mut rhs_wo_bias = N::zero();
         if motor_params.erp_inv_dt != N::zero() {
-            let half = N::splat(0.5);
-
             #[cfg(feature = "dim2")]
-            let s_ang_dist = (self.ang_err.angle() * half).simd_sin();
+            let s_ang_dist = self.ang_err.angle();
             #[cfg(feature = "dim3")]
-            let s_ang_dist = self.ang_err.imag()[_motor_axis];
-            let s_target_ang = (motor_params.target_pos * half).simd_sin();
-            rhs_wo_bias += utils::smallest_abs_diff_between_sin_angles(s_ang_dist, s_target_ang)
+            let s_ang_dist = self.ang_err.imag()[_motor_axis].simd_asin() * N::splat(2.0);
+            let s_target_ang = motor_params.target_pos; // (motor_params.target_pos * half).simd_sin();
+            rhs_wo_bias += utils::smallest_abs_diff_between_angles(s_ang_dist, s_target_ang)
                 * motor_params.erp_inv_dt;
         }
 
@@ -799,11 +797,11 @@ impl<N: WReal> JointVelocityConstraintBuilder<N> {
             let half = N::splat(0.5);
 
             #[cfg(feature = "dim2")]
-            let s_ang_dist = (self.ang_err.angle() * half).simd_sin();
+            let s_ang_dist = self.ang_err.angle(); // (self.ang_err.angle() * half).simd_sin();
             #[cfg(feature = "dim3")]
-            let s_ang_dist = self.ang_err.imag()[_motor_axis];
-            let s_target_ang = (motor_params.target_pos * half).simd_sin();
-            rhs_wo_bias += utils::smallest_abs_diff_between_sin_angles(s_ang_dist, s_target_ang)
+            let s_ang_dist = self.ang_err.imag()[_motor_axis].simd_asin() * N::splat(2.0);
+            let s_target_ang = motor_params.target_pos; // (motor_params.target_pos * half).simd_sin();
+            rhs_wo_bias += utils::smallest_abs_diff_between_angles(s_ang_dist, s_target_ang)
                 * motor_params.erp_inv_dt;
         }
 
