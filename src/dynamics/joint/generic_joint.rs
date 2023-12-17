@@ -131,6 +131,16 @@ impl<N: WReal> Default for JointLimits<N> {
     }
 }
 
+impl<N: WReal> From<[N; 2]> for JointLimits<N> {
+    fn from(value: [N; 2]) -> Self {
+        Self {
+            min: value[0],
+            max: value[1],
+            impulse: N::splat(0.0),
+        }
+    }
+}
+
 /// A joint’s motor along one of its degrees of freedom.
 #[cfg_attr(feature = "serde-serialize", derive(Serialize, Deserialize))]
 #[derive(Copy, Clone, Debug, PartialEq)]
@@ -210,14 +220,23 @@ pub struct GenericJoint {
     /// The degrees-of-freedoms motorised by this joint.
     pub motor_axes: JointAxesMask,
     /// The coupled degrees of freedom of this joint.
+    ///
+    /// Note that coupling degrees of freedoms (DoF) changes the interpretation of the coupled joint’s limits and motors.
+    /// If multiple linear DoF are limited/motorized, only the limits/motor configuration for the first
+    /// coupled linear DoF is applied to all coupled linear DoF. Similarly, if multiple angular DoF are limited/motorized
+    /// only the limits/motor configuration for the first coupled angular DoF is applied to all coupled angular DoF.
     pub coupled_axes: JointAxesMask,
     /// The limits, along each degrees of freedoms of this joint.
     ///
     /// Note that the limit must also be explicitly enabled by the `limit_axes` bitmask.
+    /// For coupled degrees of freedoms (DoF), only the first linear (resp. angular) coupled DoF limit and `limit_axis`
+    /// bitmask is applied to the coupled linear (resp. angular) axes.
     pub limits: [JointLimits<Real>; SPATIAL_DIM],
     /// The motors, along each degrees of freedoms of this joint.
     ///
-    /// Note that the mostor must also be explicitly enabled by the `motors` bitmask.
+    /// Note that the motor must also be explicitly enabled by the `motor_axes` bitmask.
+    /// For coupled degrees of freedoms (DoF), only the first linear (resp. angular) coupled DoF motor and `motor_axes`
+    /// bitmask is applied to the coupled linear (resp. angular) axes.
     pub motors: [JointMotor; SPATIAL_DIM],
     /// Are contacts between the attached rigid-bodies enabled?
     pub contacts_enabled: bool,

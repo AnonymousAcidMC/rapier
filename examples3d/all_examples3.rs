@@ -45,6 +45,7 @@ mod primitives3;
 mod restitution3;
 mod rope_joints3;
 mod sensor3;
+mod spring_joints3;
 mod trimesh3;
 mod vehicle_controller3;
 
@@ -105,6 +106,7 @@ pub fn main() {
         ("Restitution", restitution3::init_world),
         ("Rope Joints", rope_joints3::init_world),
         ("Sensor", sensor3::init_world),
+        ("Spring Joints", spring_joints3::init_world),
         ("TriMesh", trimesh3::init_world),
         ("Vehicle controller", vehicle_controller3::init_world),
         ("Keva tower", keva3::init_world),
