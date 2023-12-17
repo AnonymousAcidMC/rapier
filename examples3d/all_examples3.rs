@@ -48,6 +48,7 @@ mod sensor3;
 mod spring_joints3;
 mod trimesh3;
 mod vehicle_controller3;
+mod vehicle_joints3;
 
 fn demo_name_from_command_line() -> Option<String> {
     let mut args = std::env::args();
@@ -109,6 +110,7 @@ pub fn main() {
         ("Spring Joints", spring_joints3::init_world),
         ("TriMesh", trimesh3::init_world),
         ("Vehicle controller", vehicle_controller3::init_world),
+        ("Vehicle joints", vehicle_joints3::init_world),
         ("Keva tower", keva3::init_world),
         ("Newton cradle", newton_cradle3::init_world),
         ("(Debug) multibody_joints", debug_articulations3::init_world),

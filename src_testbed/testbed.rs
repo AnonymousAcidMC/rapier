@@ -147,6 +147,7 @@ pub struct TestbedGraphics<'a, 'b, 'c, 'd, 'e, 'f> {
     #[allow(dead_code)] // Dead in 2D but not in 3D.
     camera_transform: GlobalTransform,
     camera: &'a mut OrbitCamera,
+    keys: &'a Input<KeyCode>,
 }
 
 pub struct Testbed<'a, 'b, 'c, 'd, 'e, 'f> {
@@ -457,6 +458,10 @@ impl<'a, 'b, 'c, 'd, 'e, 'f> TestbedGraphics<'a, 'b, 'c, 'd, 'e, 'f> {
             handle,
             colliders,
         )
+    }
+
+    pub fn keys(&self) -> &Input<KeyCode> {
+        &*self.keys
     }
 }
 
@@ -1107,6 +1112,7 @@ fn update_testbed(
             components: &mut gfx_components,
             camera_transform: *cameras.single().1,
             camera: &mut cameras.single_mut().2,
+            keys: &*keys,
         };
 
         let mut testbed = Testbed {
@@ -1200,6 +1206,7 @@ fn update_testbed(
                 components: &mut gfx_components,
                 camera_transform: *cameras.single().1,
                 camera: &mut cameras.single_mut().2,
+                keys: &*keys,
             };
 
             let mut testbed = Testbed {
@@ -1351,6 +1358,7 @@ fn update_testbed(
                     components: &mut gfx_components,
                     camera_transform: *cameras.single().1,
                     camera: &mut cameras.single_mut().2,
+                    keys: &*keys,
                 };
                 harness.step_with_graphics(Some(&mut testbed_graphics));
 
