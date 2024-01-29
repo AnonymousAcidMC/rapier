@@ -39,6 +39,7 @@ mod debug_cube_high_mass_ratio3;
 mod debug_internal_edges3;
 mod debug_long_chain3;
 mod debug_multibody_ang_motor_pos3;
+mod debug_joint_point_at_cube;
 mod joint_motor_position3;
 mod keva3;
 mod locked_rotations3;
@@ -153,6 +154,10 @@ pub fn main() {
         (
             "(Debug) multibody ang. motor pos.",
             debug_multibody_ang_motor_pos3::init_world,
+        ),
+        (
+            "(Debug) Joint point at target.",
+            debug_joint_point_at_cube::init_world,
         ),
     ];
 
