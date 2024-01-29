@@ -38,12 +38,16 @@ pub(crate) fn simd_inv<N: SimdRealCopy>(val: N) -> N {
 }
 
 pub(crate) fn wrap_to_pi(angle: Real) -> Real {
-    let pi = 3.14159265358979323846264338327950288;
+    macro_rules! pi {
+        () => {
+            3.14159265358979323846264338327950288
+        };
+    }
     return
-        (angle + Real::signum(angle) * pi) % (2. * pi) -
+        (angle + Real::signum(angle) * pi!()) % (2. * pi!()) -
         (Real::signum(Real::signum(angle) +
-        2. * (Real::signum(Real::abs(((angle + pi) % (2. * pi)) 
-        / (2. * pi))) - 1.))) * pi;
+        2. * (Real::signum(Real::abs(((angle + pi!()) % (2. * pi!())) 
+        / (2. * pi!()))) - 1.))) * pi!();
 }
 
 /// Trait to copy the sign of each component of one scalar/vector/matrix to another.
