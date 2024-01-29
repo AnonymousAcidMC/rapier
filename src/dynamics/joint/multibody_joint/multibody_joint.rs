@@ -1,3 +1,5 @@
+use std::f32::consts::PI;
+
 use crate::dynamics::solver::JointGenericOneBodyConstraint;
 use crate::dynamics::{
     joint, FixedJointBuilder, GenericJoint, IntegrationParameters, Multibody, MultibodyLink,
@@ -8,6 +10,7 @@ use crate::math::{
     SPATIAL_DIM,
 };
 use na::{DVector, DVectorViewMut};
+use crate::utils::wrap_to_pi;
 #[cfg(feature = "dim3")]
 use na::{UnitQuaternion, Vector3};
 
@@ -90,6 +93,7 @@ impl MultibodyJoint {
 
         let locked_ang_bits = locked_bits >> DIM;
         let num_free_ang_dofs = ANG_DIM - locked_ang_bits.count_ones() as usize;
+
         match num_free_ang_dofs {
             0 => { /* No free dofs. */ }
             1 => {
@@ -113,12 +117,21 @@ impl MultibodyJoint {
             #[cfg(feature = "dim3")]
             3 => {
                 let angvel = Vector3::from_row_slice(&vels[curr_free_dof..curr_free_dof + 3]);
-                let disp = UnitQuaternion::new_eps(angvel * dt, 0.0);
-                self.joint_rot = disp * self.joint_rot;
+                let ang_disp = angvel * dt;
+                self.joint_rot = UnitQuaternion::new_eps(ang_disp, 0.0) * self.joint_rot;
+
                 let (x, y, z) = self.joint_rot.to_rotation_matrix().euler_angles();
-                self.coords[3] = x;
-                self.coords[4] = y;
-                self.coords[5] = z;
+
+                let approx_x = wrap_to_pi(self.coords[3] + ang_disp[0]);
+                let approx_y = wrap_to_pi(self.coords[4] + ang_disp[1]);
+                let approx_z = wrap_to_pi(self.coords[5] + ang_disp[2]);
+                let error_x =  approx_x - x;
+                let error_y =  approx_y - y;
+                let error_z =  approx_z - z;
+                
+                self.coords[3] = self.coords[3] + ang_disp[0] - error_x;
+                self.coords[4] = self.coords[4] + ang_disp[1] - error_y;
+                self.coords[5] = self.coords[5] + ang_disp[2] - error_z;
             }
             _ => unreachable!(),
         }

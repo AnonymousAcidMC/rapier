@@ -30,7 +30,6 @@ resolver = "2"
 [profile.dev]
 opt-level = 1
 
-
 #[profile.dev.package.rapier3d]
 #opt-level = 3
 #

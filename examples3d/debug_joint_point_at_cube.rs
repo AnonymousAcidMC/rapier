@@ -18,7 +18,7 @@ pub fn init_world(testbed: &mut Testbed) {
     let collider = ColliderBuilder::capsule_y(0.5, 0.1);
     colliders.insert_with_parent(collider, rb1_handle, &mut bodies);
 
-    let cube_pos = vector![1., 4., 2.];
+    let cube_pos = vector![1., 5., 2.];
     let rb2 = RigidBodyBuilder::fixed().position(cube_pos.into());
     let rb2_handle = bodies.insert(rb2);
     let collider = ColliderBuilder::cuboid(0.5, 0.5, 0.5);

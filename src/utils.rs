@@ -37,6 +37,15 @@ pub(crate) fn simd_inv<N: SimdRealCopy>(val: N) -> N {
     N::zero().select(val.simd_gt(-eps) & val.simd_lt(eps), N::one() / val)
 }
 
+pub(crate) fn wrap_to_pi(angle: Real) -> Real {
+    let pi = 3.14159265358979323846264338327950288;
+    return
+        (angle + Real::signum(angle) * pi) % (2. * pi) -
+        (Real::signum(Real::signum(angle) +
+        2. * (Real::signum(Real::abs(((angle + pi) % (2. * pi)) 
+        / (2. * pi))) - 1.))) * pi;
+}
+
 /// Trait to copy the sign of each component of one scalar/vector/matrix to another.
 pub trait SimdSign<Rhs>: Sized {
     // See SIMD implementations of copy_sign there: https://stackoverflow.com/a/57872652
