@@ -1,3 +1,5 @@
+use std::f32::consts::PI;
+
 use rapier3d::{na::{UnitQuaternion, UnitVector3}, prelude::*};
 use rapier_testbed3d::Testbed;
 
@@ -38,11 +40,11 @@ pub fn init_world(testbed: &mut Testbed) {
         initial_dir.angle(&target_dir)
     );
     let (x, y, z) = target_rot.to_rotation_matrix().euler_angles();
-
+    
     let joint = SphericalJointBuilder::new()
         .local_anchor1(point![0.0, 4.0, 0.0])
         .local_anchor2(point![0.0, 0.0, 0.0])
-        .motor_position(JointAxis::AngX, x, 1000.0, 200.)
+        .motor_position(JointAxis::AngX, x + 200.*PI, 1000.0, 200.)
         .motor_position(JointAxis::AngY, y, 1000.0, 200.)
         .motor_position(JointAxis::AngZ, z, 1000.0, 200.)
         ;

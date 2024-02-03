@@ -9,10 +9,9 @@ use crate::math::{
     Isometry, JacobianViewMut, Real, Rotation, SpacialVector, Translation, Vector, ANG_DIM, DIM,
     SPATIAL_DIM,
 };
-use na::{DVector, DVectorViewMut};
-use crate::utils::wrap_to_pi;
+use na::{ComplexField, DVector, DVectorViewMut, Quaternion, UnitQuaternion};
 #[cfg(feature = "dim3")]
-use na::{UnitQuaternion, Vector3};
+use na::Vector3;
 
 #[cfg_attr(feature = "serde-serialize", derive(Serialize, Deserialize))]
 #[derive(Copy, Clone, Debug)]
@@ -120,18 +119,23 @@ impl MultibodyJoint {
                 let ang_disp = angvel * dt;
                 self.joint_rot = UnitQuaternion::new_eps(ang_disp, 0.0) * self.joint_rot;
 
-                let (x, y, z) = self.joint_rot.to_rotation_matrix().euler_angles();
+                let(approx_x, approx_y, approx_z) = (
+                    self.coords[3] + ang_disp[0],
+                    self.coords[4] + ang_disp[1],
+                    self.coords[5] + ang_disp[2]
+                );
+                let approx_rot = UnitQuaternion::from_euler_angles(
+                    approx_x,
+                    approx_y,
+                    approx_z
+                );
 
-                let approx_x = wrap_to_pi(self.coords[3] + ang_disp[0]);
-                let approx_y = wrap_to_pi(self.coords[4] + ang_disp[1]);
-                let approx_z = wrap_to_pi(self.coords[5] + ang_disp[2]);
-                let error_x =  approx_x - x;
-                let error_y =  approx_y - y;
-                let error_z =  approx_z - z;
-                
-                self.coords[3] = self.coords[3] + ang_disp[0] - error_x;
-                self.coords[4] = self.coords[4] + ang_disp[1] - error_y;
-                self.coords[5] = self.coords[5] + ang_disp[2] - error_z;
+                let error_rot = self.joint_rot.rotation_to(&approx_rot);
+                let (err_x, err_y, err_z) = error_rot.to_rotation_matrix().euler_angles();
+
+                self.coords[3] = approx_x - err_x;
+                self.coords[4] = approx_y - err_y;
+                self.coords[5] = approx_z - err_z;
             }
             _ => unreachable!(),
         }

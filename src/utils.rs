@@ -1,8 +1,7 @@
 //! Miscellaneous utilities.
 
 use na::{
-    Matrix1, Matrix2, Matrix3, Point2, Point3, RowVector2, Scalar, SimdRealField, UnitComplex,
-    UnitQuaternion, Vector1, Vector2, Vector3,
+    ComplexField, Matrix1, Matrix2, Matrix3, Point2, Point3, RowVector2, Scalar, SimdRealField, UnitComplex, UnitQuaternion, Vector1, Vector2, Vector3
 };
 use num::Zero;
 use simba::simd::SimdValue;
@@ -35,19 +34,6 @@ pub(crate) fn inv(val: Real) -> Real {
 pub(crate) fn simd_inv<N: SimdRealCopy>(val: N) -> N {
     let eps = N::splat(INV_EPSILON);
     N::zero().select(val.simd_gt(-eps) & val.simd_lt(eps), N::one() / val)
-}
-
-pub(crate) fn wrap_to_pi(angle: Real) -> Real {
-    macro_rules! pi {
-        () => {
-            3.14159265358979323846264338327950288
-        };
-    }
-    return
-        (angle + Real::signum(angle) * pi!()) % (2. * pi!()) -
-        (Real::signum(Real::signum(angle) +
-        2. * (Real::signum(Real::abs(((angle + pi!()) % (2. * pi!())) 
-        / (2. * pi!()))) - 1.))) * pi!();
 }
 
 /// Trait to copy the sign of each component of one scalar/vector/matrix to another.
