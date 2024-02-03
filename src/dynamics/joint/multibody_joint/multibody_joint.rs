@@ -9,9 +9,11 @@ use crate::math::{
     Isometry, JacobianViewMut, Real, Rotation, SpacialVector, Translation, Vector, ANG_DIM, DIM,
     SPATIAL_DIM,
 };
+use approx::relative_eq;
 use na::{ComplexField, DVector, DVectorViewMut, Quaternion, UnitQuaternion};
 #[cfg(feature = "dim3")]
 use na::Vector3;
+use parry::math::DEFAULT_EPSILON;
 
 #[cfg_attr(feature = "serde-serialize", derive(Serialize, Deserialize))]
 #[derive(Copy, Clone, Debug)]
@@ -119,19 +121,19 @@ impl MultibodyJoint {
                 let ang_disp = angvel * dt;
                 self.joint_rot = UnitQuaternion::new_eps(ang_disp, 0.0) * self.joint_rot;
 
-                let(approx_x, approx_y, approx_z) = (
+                let (approx_x, approx_y, approx_z) = (
                     self.coords[3] + ang_disp[0],
                     self.coords[4] + ang_disp[1],
                     self.coords[5] + ang_disp[2]
                 );
-                let approx_rot = UnitQuaternion::from_euler_angles(
-                    approx_x,
-                    approx_y,
-                    approx_z
-                );
 
-                let error_rot = self.joint_rot.rotation_to(&approx_rot);
-                let (err_x, err_y, err_z) = error_rot.to_rotation_matrix().euler_angles();
+                let (actual_x, actual_y, actual_z) = self.joint_rot.to_rotation_matrix().euler_angles();
+
+                let (err_x, err_y, err_z) = (
+                    approx_x.sin().atan2(approx_x.cos()) - actual_x,
+                    approx_y.sin().atan2(approx_y.cos()) - actual_y,
+                    approx_z.sin().atan2(approx_z.cos()) - actual_z
+                );
 
                 self.coords[3] = approx_x - err_x;
                 self.coords[4] = approx_y - err_y;

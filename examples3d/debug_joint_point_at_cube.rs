@@ -44,9 +44,9 @@ pub fn init_world(testbed: &mut Testbed) {
     let joint = SphericalJointBuilder::new()
         .local_anchor1(point![0.0, 4.0, 0.0])
         .local_anchor2(point![0.0, 0.0, 0.0])
-        .motor_position(JointAxis::AngX, x + 200.*PI, 1000.0, 200.)
+        .motor_position(JointAxis::AngX, x, 1000.0, 200.)
         .motor_position(JointAxis::AngY, y, 1000.0, 200.)
-        .motor_position(JointAxis::AngZ, z, 1000.0, 200.)
+        .motor_position(JointAxis::AngZ, -90_f32.to_radians(), 1000.0, 200.)
         ;
 
     multibody_joints.insert(body, rb1_handle, joint, true);
