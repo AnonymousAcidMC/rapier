@@ -1,3 +1,5 @@
+use std::borrow::Borrow;
+
 use super::{JointConstraintTypes, SolverConstraintsSet};
 use crate::dynamics::solver::solver_body::SolverBody;
 use crate::dynamics::{
@@ -94,16 +96,26 @@ impl VelocitySolver {
         // Assign solver ids to multibodies, and collect the relevant roots.
         // And init solver_vels for rigidb-bodies.
         let mut multibody_solver_id = 0;
+        let mut multibodies_included = Vec::new();
         for handle in islands.active_island(island_id) {
             if let Some(link) = multibodies.rigid_body_link(*handle).copied() {
-                let multibody = multibodies
-                    .get_multibody_mut_internal(link.multibody)
-                    .unwrap();
+                if multibodies_included.contains(&link.multibody) { continue; }
 
-                if link.id == 0 || link.id == 1 && !multibody.root_is_dynamic {
-                    multibody.solver_id = multibody_solver_id;
-                    multibody_solver_id += multibody.ndofs();
-                    self.multibody_roots.push(link);
+                let mut mb_root_body = None;
+                {
+                    let multibody = multibodies
+                        .get_multibody_mut_internal(link.multibody)
+                        .unwrap();
+
+                    if !multibody.root_is_dynamic {
+                        multibody.solver_id = multibody_solver_id;
+                        multibody_solver_id += multibody.ndofs();
+                        multibodies_included.push(link.multibody);
+                        mb_root_body = Some(multibody.root().rigid_body);
+                    }
+                }
+                if let Some(body) = mb_root_body {
+                    self.multibody_roots.push(*multibodies.rigid_body_link(body).unwrap());
                 }
             } else {
                 let rb = &bodies[*handle];
