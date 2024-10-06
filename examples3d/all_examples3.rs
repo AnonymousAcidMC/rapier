@@ -42,6 +42,7 @@ mod debug_cube_high_mass_ratio3;
 mod debug_internal_edges3;
 mod debug_long_chain3;
 mod debug_multibody_ang_motor_pos3;
+mod debug_multibody_sleep3;
 mod inverse_kinematics3;
 mod joint_motor_position3;
 mod keva3;
@@ -164,6 +165,8 @@ pub fn main() {
             "(Debug) multibody ang. motor pos.",
             debug_multibody_ang_motor_pos3::init_world,
         ),
+
+        ("00 (Debug) sticcman", debug_multibody_sleep3::init_world)
     ];
 
     // Lexicographic sort, with stress tests moved at the end of the list.
